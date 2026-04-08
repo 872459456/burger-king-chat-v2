@@ -1,0 +1,85 @@
+# 汉堡王自治系统配置
+# v2.0 - 增强版
+
+system:
+  name: "汉堡王自治系统"
+  version: "2.0.0"
+  log_level: "INFO"
+  log_file: "logs/burger_king.log"
+
+# OpenClaw 配置
+openclaw:
+  gateway_url: "http://127.0.0.1:18789"
+  agents:
+    - name: "hamburger"
+      role: "主持协调"
+      system_prompt: "你是汉堡，狼群的执行副手。负责主持圆桌会议、协调讨论、总结归纳、推动投票与记忆存储。"
+    - name: "frenchFries"
+      role: "智囊分析"
+      system_prompt: "你是薯条，狼群的智囊。擅长深度分析、战略思考、提供备选方案。"
+    - name: "cola"
+      role: "执行落实"
+      system_prompt: "你是可乐，狼群的执行者。关注实际落地、执行细节、问题与挑战。"
+
+# 调度配置
+scheduler:
+  # 工作日 8:00-18:00，每30分钟触发
+  enabled: true
+  cron: "*/30 8-18 * * 1-5"
+  timezone: "Asia/Shanghai"
+  max_turns: 10          # 每轮圆桌会议最大轮次
+  turn_interval: 30      # Agent发言间隔（秒）
+  timeout: 300           # 单次调度超时（秒）
+
+# 飞书配置
+feishu:
+  enabled: true
+  group_id: ""          # 群组ID（启动后自动填充）
+  bot_names:
+    - "汉堡"
+    - "薯条"
+    - "可乐"
+  user_keywords:
+   有价值: "有价值"
+    无价值: "无价值"
+    跳过: "跳过"
+    介入: "介入"
+
+# 知识库配置
+knowledge_base:
+  enabled: true
+  vector_db: "chroma"
+  persist_path: "knowledge_base/chroma_db"
+  embedding_model: "BAAI/bge-small-zh-v1.5"
+  top_k: 3              # 检索返回条数
+
+# 记忆配置
+memory:
+  short_term_threshold: 2   # 票数>=2存入短期记忆
+  long_term_threshold: 3   # 票数>=3存入长期记忆
+  base_path: "memory"
+  agents:
+    - "hamburger"
+    - "fries"
+    - "cola"
+
+# 投票配置
+voting:
+  participants:
+    - "hamburger"
+    - "frenchFries"
+    - "cola"
+    - "user"
+  min_participants: 2
+  auto_vote_hamburger: true  # 汉堡自动投"有价值"
+
+# 圆桌会议配置
+roundtable:
+  intro_template: |
+    🐺 圆桌会议开始了！
+    主题：{topic}
+    参与者：汉堡(主持)、薯条(智囊)、可乐(执行)
+    规则：每人按序发言，共{turns}轮
+    
+  context_injection: true    # 是否注入相关历史上下文
+  role_playing_strict: true  # 严格角色扮演
