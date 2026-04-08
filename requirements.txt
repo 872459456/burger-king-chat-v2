@@ -1,15 +1,9 @@
+# 汉堡王自治系统 V2 依赖
 # Core
-openai>=1.0.0
-chromadb>=0.4.0
-sentence-transformers>=2.0.0
 pyyaml>=6.0
 python-dateutil>=2.8.0
 
-# Feishu
-feishu>=0.1.0
-websocket-client>=1.0.0
-
-# Web
+# Web (可选，用于提供API界面)
 flask>=3.0.0
 flask-socketio>=5.0.0
 python-socketio>=5.0.0
@@ -18,3 +12,10 @@ eventlet>=0.35.0
 # Utils
 rich>=13.0.0
 tqdm>=4.0.0
+
+# 向量数据库（可选，不装则知识库降级为纯文本搜索）
+chromadb>=0.4.0
+sentence-transformers>=2.0.0
+
+# 注意：飞书和OpenClaw通过 CLI 调用，无需额外 Python SDK
+# openclaw CLI 已随 npm 全局安装

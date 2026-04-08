@@ -8,8 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
 
 class MemoryStore:
     """汉堡王分级记忆存储"""

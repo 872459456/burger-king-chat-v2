@@ -9,7 +9,6 @@ system:
 
 # OpenClaw 配置
 openclaw:
-  gateway_url: "http://127.0.0.1:18789"
   agents:
     - name: "hamburger"
       role: "主持协调"
@@ -23,24 +22,25 @@ openclaw:
 
 # 调度配置
 scheduler:
-  # 工作日 8:00-18:00，每30分钟触发
   enabled: true
   cron: "*/30 8-18 * * 1-5"
   timezone: "Asia/Shanghai"
-  max_turns: 10          # 每轮圆桌会议最大轮次
-  turn_interval: 30      # Agent发言间隔（秒）
-  timeout: 300           # 单次调度超时（秒）
+  max_turns: 10
+  turn_interval: 30
+  timeout: 120
 
 # 飞书配置
 feishu:
   enabled: true
-  group_id: ""          # 群组ID（启动后自动填充）
+  account: "main"
+  group_id: "oc_9ea914f5ad7acbd9061c915a0f942d5c"
+  group_name: "汉堡王"
   bot_names:
     - "汉堡"
     - "薯条"
     - "可乐"
   user_keywords:
-   有价值: "有价值"
+    有价值: "有价值"
     无价值: "无价值"
     跳过: "跳过"
     介入: "介入"
@@ -51,12 +51,12 @@ knowledge_base:
   vector_db: "chroma"
   persist_path: "knowledge_base/chroma_db"
   embedding_model: "BAAI/bge-small-zh-v1.5"
-  top_k: 3              # 检索返回条数
+  top_k: 3
 
 # 记忆配置
 memory:
-  short_term_threshold: 2   # 票数>=2存入短期记忆
-  long_term_threshold: 3   # 票数>=3存入长期记忆
+  short_term_threshold: 2
+  long_term_threshold: 3
   base_path: "memory"
   agents:
     - "hamburger"
@@ -71,7 +71,7 @@ voting:
     - "cola"
     - "user"
   min_participants: 2
-  auto_vote_hamburger: true  # 汉堡自动投"有价值"
+  auto_vote_hamburger: true
 
 # 圆桌会议配置
 roundtable:
@@ -81,5 +81,5 @@ roundtable:
     参与者：汉堡(主持)、薯条(智囊)、可乐(执行)
     规则：每人按序发言，共{turns}轮
     
-  context_injection: true    # 是否注入相关历史上下文
-  role_playing_strict: true  # 严格角色扮演
+  context_injection: true
+  role_playing_strict: true
