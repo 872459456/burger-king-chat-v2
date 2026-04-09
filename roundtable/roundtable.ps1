@@ -1,4 +1,4 @@
-# roundtable.ps1 - Final version with full content send to Feishu
+# roundtable.ps1 - Final version with Python-based Feishu sender
 param([int]$Timeout=45, [string]$Topic="")
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -6,23 +6,8 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 chcp 65001 | Out-Null
 
 $ErrorActionPreference = "SilentlyContinue"
-$cfgPath = "$env:APPDATA\npm\node_modules\openclaw\config\gateway.json"
-if (-not (Test-Path $cfgPath)) {
-    $cfgPath = "$env:USERPROFILE\.openclaw\openclaw.json"
-}
-$cfg = Get-Content $cfgPath -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-if (-not $cfg) {
-    $port = $env:OPENCLAW_GATEWAY_PORT
-    $token = $env:OPENCLAW_GATEWAY_TOKEN
-} else {
-    $port = $cfg.gateway.port
-    $token = $cfg.gateway.auth.token
-}
-$baseUrl = "http://localhost:$port"
-$headers = @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" }
 $OPENCLAW = "$env:APPDATA\npm\node_modules\openclaw\openclaw.mjs"
 $GID = "oc_9ea914f5ad7acbd9061c915a0f942d5c"
-$MAIN = "main"
 $LOG = "D:\works\Project\burger-king-chat-v2\roundtable\logs"
 $PY = "python"
 
@@ -31,11 +16,65 @@ if (-not $Topic) {
     $Topic = $topics[(Get-Random -Maximum $topics.Length)]
 }
 
-function Out-Feishu($text) {
-    try {
-        $body = @{ channel="feishu"; accountId=$MAIN; target=$GID; message=$text } | ConvertTo-Json
-        $null = Invoke-WebRequest "$baseUrl/api/messages/send" -Method POST -Headers $headers -Body $body -TimeoutSec 10
-    } catch {}
+function Send-Feishu($text) {
+    # Write message to temp file (UTF-8)
+    $msgFile = "$LOG\send_msg.txt"
+    $Utf8NoBom = New-Object System.Text.UTF8Encoding $False
+    [System.IO.File]::WriteAllText($msgFile, $text, $Utf8NoBom)
+    
+    # Use Python to send via Gateway API (handles UTF-8 correctly)
+    $sendPy = @"
+import sys
+import os
+import json
+import urllib.request
+
+msg_file = r"$msgFile"
+with open(msg_file, 'r', encoding='utf-8') as f:
+    message = f.read()
+
+cfg_path = os.path.expandvars(r'%APPDATA%\npm\node_modules\openclaw\config\gateway.json')
+try:
+    with open(cfg_path, 'r', encoding='utf-8') as f:
+        cfg = json.load(f)
+    port = cfg.get('gateway', {}).get('port', 18789)
+    token = cfg.get('gateway', {}).get('auth', {}).get('token', 'openclaw')
+except:
+    port = 18789
+    token = 'openclaw'
+
+url = f'http://localhost:{port}/api/messages/send'
+data = {
+    'channel': 'feishu',
+    'accountId': 'main',
+    'target': '$GID',
+    'message': message
+}
+
+req = urllib.request.Request(
+    url,
+    data=json.dumps(data, ensure_ascii=False).encode('utf-8'),
+    headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    },
+    method='POST'
+)
+
+try:
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        result = resp.read().decode('utf-8')
+        print(f'Sent: {result}')
+except Exception as e:
+    print(f'Error: {e}')
+"@
+    
+    $sendPyFile = "$LOG\send_feishu_temp.py"
+    [System.IO.File]::WriteAllText($sendPyFile, $sendPy, $Utf8NoBom)
+    
+    $proc = Start-Process python -ArgumentList "`"$sendPyFile`"" -PassThru -WindowStyle Hidden
+    Start-Sleep -Seconds 5
+    if (-not $proc.HasExited) { $proc.Kill() }
 }
 
 function Get-AgentReply($agent, $prompt) {
@@ -58,15 +97,14 @@ function Get-AgentReply($agent, $prompt) {
 }
 
 Write-Host "[Roundtable] Topic: $Topic"
-Out-Feishu "[Wolf Pack] Roundtable starting - Topic: $Topic"
 
 $friesPrompt = "You are fries (智囊). Topic: $Topic. Reply 2-3 sentences, format: [F] fries your view."
 $f = Get-AgentReply "fries" $friesPrompt
-if ($f) { Write-Host "[fries] $f"; Out-Feishu "[F] $f" } else { Write-Host "[fries] no response" }
+if ($f) { Write-Host "[fries] $f" } else { Write-Host "[fries] no response" }
 
 $colaPrompt = "You are cola (执行者). Topic: $Topic. Reply 2-3 sentences, format: [C] cola your view."
 $c = Get-AgentReply "cola" $colaPrompt
-if ($c) { Write-Host "[cola] $c"; Out-Feishu "[C] $c" } else { Write-Host "[cola] no response" }
+if ($c) { Write-Host "[cola] $c" } else { Write-Host "[cola] no response" }
 
 # Hamburger - dynamic generation
 Write-Host "[hamburger] generating..."
@@ -83,11 +121,12 @@ $fMsg = if (Test-Path $fFile) { Get-Content $fFile -Raw -Encoding UTF8 } else { 
 $cMsg = if (Test-Path $cFile) { Get-Content $cFile -Raw -Encoding UTF8 } else { "no response" }
 $hMsg = if (Test-Path $hFile) { Get-Content $hFile -Raw -Encoding UTF8 } else { "[H] hamburger: Coordinator perspective" }
 
-# Send full roundtable to Feishu
+# Build and send full message
 $timeStr = Get-Date -Format "HH:mm"
 $introMsg = "🐺 圆桌会议 #$timeStr | 议题：$Topic"
 $fullMsg = "$introMsg`n`n🍟 [F] $fMsg`n`n🥤 [C] $cMsg`n`n🍔 $hMsg"
-Write-Host "[Sending full content to Feishu...]"
-Out-Feishu $fullMsg
+Write-Host "[Sending to Feishu...]"
+Write-Host $fullMsg
+Send-Feishu $fullMsg
 
 Write-Host "[Roundtable] Done"
