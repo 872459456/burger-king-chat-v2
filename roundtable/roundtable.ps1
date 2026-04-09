@@ -1,5 +1,5 @@
 # roundtable.ps1 - Final version with Python-based Feishu sender
-param([int]$Timeout=45, [string]$Topic="")
+param([int]$Timeout=55, [string]$Topic="")
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
