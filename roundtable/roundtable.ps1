@@ -1,5 +1,5 @@
 # roundtable.ps1 - Final version with dynamic hamburger generation
-param([int]$Timeout=60, [string]$Topic="")
+param([int]$Timeout=45, [string]$Topic="")
 
 # Fix encoding
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -43,7 +43,7 @@ function Get-AgentReply($agent, $prompt) {
     $outFile = "$LOG\${agent}_reply.txt"
     $cmd = "node `"$OPENCLAW`" agent --agent $agent --message `"$prompt`" --timeout $Timeout"
     $proc = Start-Process cmd -ArgumentList "/c $cmd > `"$outFile`" 2>&1" -PassThru -WindowStyle Hidden
-    Start-Sleep -Seconds ($Timeout + 5)
+    Start-Sleep -Seconds ($Timeout + 3)
     if ((Test-Path $outFile) -and ($proc.HasExited -eq $false)) {
         $content = Get-Content $outFile -Raw -Encoding UTF8
         $proc.Kill()
