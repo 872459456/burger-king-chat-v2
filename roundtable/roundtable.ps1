@@ -1,7 +1,6 @@
-# roundtable.ps1 - Final version with dynamic hamburger generation
+# roundtable.ps1 - Final version with full content send to Feishu
 param([int]$Timeout=45, [string]$Topic="")
 
-# Fix encoding
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 chcp 65001 | Out-Null
@@ -53,7 +52,7 @@ function Get-AgentReply($agent, $prompt) {
     } else {
         $content = Get-Content $outFile -Raw -Encoding UTF8
     }
-    $content = $content -replace "(?s).*?(\[[HFC][\s\]].*)", '$1' -replace ".*?(H\s.*)", '$1'
+    $content = $content -replace "(?s).*?(\[[HFC][\s\]].*)", '$1'
     if (-not $content) { $content = Get-Content $outFile -Raw -Encoding UTF8 }
     return $content.Trim()
 }
@@ -69,21 +68,26 @@ $colaPrompt = "You are cola (执行者). Topic: $Topic. Reply 2-3 sentences, for
 $c = Get-AgentReply "cola" $colaPrompt
 if ($c) { Write-Host "[cola] $c"; Out-Feishu "[C] $c" } else { Write-Host "[cola] no response" }
 
-# Hamburger - 动态生成协调者视角（调用Python脚本）
+# Hamburger - dynamic generation
 Write-Host "[hamburger] generating..."
 $genCmd = "$PY `"$LOG\..\generate_hamburger.py`" `"$Topic`""
 $genProc = Start-Process cmd -ArgumentList "/c $genCmd" -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 3
 if (-not $genProc.HasExited) { $genProc.Kill() }
 
-# 读取生成的内容
+# Read all replies
+$fFile = "$LOG\fries_reply.txt"
+$cFile = "$LOG\cola_reply.txt"
 $hFile = "$LOG\hamburger_msg.txt"
-if (Test-Path $hFile) {
-    $hMsg = Get-Content $hFile -Raw -Encoding UTF8
-    Write-Host "[hamburger] $hMsg"
-    Out-Feishu $hMsg
-} else {
-    Write-Host "[hamburger] generation failed"
-}
+$fMsg = if (Test-Path $fFile) { Get-Content $fFile -Raw -Encoding UTF8 } else { "no response" }
+$cMsg = if (Test-Path $cFile) { Get-Content $cFile -Raw -Encoding UTF8 } else { "no response" }
+$hMsg = if (Test-Path $hFile) { Get-Content $hFile -Raw -Encoding UTF8 } else { "[H] hamburger: Coordinator perspective" }
+
+# Send full roundtable to Feishu
+$timeStr = Get-Date -Format "HH:mm"
+$introMsg = "🐺 圆桌会议 #$timeStr | 议题：$Topic"
+$fullMsg = "$introMsg`n`n🍟 [F] $fMsg`n`n🥤 [C] $cMsg`n`n🍔 $hMsg"
+Write-Host "[Sending full content to Feishu...]"
+Out-Feishu $fullMsg
 
 Write-Host "[Roundtable] Done"
