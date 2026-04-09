@@ -1,4 +1,4 @@
-# roundtable.ps1 - Final version with hamburger direct generate (reads Chinese from file)
+# roundtable.ps1 - Final version with dynamic hamburger generation
 param([int]$Timeout=60, [string]$Topic="")
 
 # Fix encoding
@@ -25,6 +25,7 @@ $OPENCLAW = "$env:APPDATA\npm\node_modules\openclaw\openclaw.mjs"
 $GID = "oc_9ea914f5ad7acbd9061c915a0f942d5c"
 $MAIN = "main"
 $LOG = "D:\works\Project\burger-king-chat-v2\roundtable\logs"
+$PY = "python"
 
 if (-not $Topic) {
     $topics = @("AI Agent Future","Multi-Agent Collaboration","Memory Persistence","AI-Human Boundary","Vertical vs Platform","Wolf Pack Tactics")
@@ -68,15 +69,21 @@ $colaPrompt = "You are cola (执行者). Topic: $Topic. Reply 2-3 sentences, for
 $c = Get-AgentReply "cola" $colaPrompt
 if ($c) { Write-Host "[cola] $c"; Out-Feishu "[C] $c" } else { Write-Host "[cola] no response" }
 
-# Hamburger - read Chinese content from file (avoid PowerShell inline Chinese parsing issue)
+# Hamburger - 动态生成协调者视角（调用Python脚本）
+Write-Host "[hamburger] generating..."
+$genCmd = "$PY `"$LOG\..\generate_hamburger.py`" `"$Topic`""
+$genProc = Start-Process cmd -ArgumentList "/c $genCmd" -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 3
+if (-not $genProc.HasExited) { $genProc.Kill() }
+
+# 读取生成的内容
 $hFile = "$LOG\hamburger_msg.txt"
 if (Test-Path $hFile) {
     $hMsg = Get-Content $hFile -Raw -Encoding UTF8
-    Write-Host "[hamburger] loaded from file"
+    Write-Host "[hamburger] $hMsg"
+    Out-Feishu $hMsg
 } else {
-    $hMsg = "[H] hamburger: structure over individuals. Control enables progress."
-    Write-Host "[hamburger] using default"
+    Write-Host "[hamburger] generation failed"
 }
-Out-Feishu $hMsg
 
 Write-Host "[Roundtable] Done"
