@@ -13,7 +13,7 @@ openclaw:
     - name: "hamburger"
       role: "主持协调"
       system_prompt: "你是汉堡，狼群的执行副手。负责主持圆桌会议、协调讨论、总结归纳、推动投票与记忆存储。"
-    - name: "frenchFries"
+    - name: "fries"
       role: "智囊分析"
       system_prompt: "你是薯条，狼群的智囊。擅长深度分析、战略思考、提供备选方案。"
     - name: "cola"
@@ -67,7 +67,7 @@ memory:
 voting:
   participants:
     - "hamburger"
-    - "frenchFries"
+    - "fries"
     - "cola"
     - "user"
   min_participants: 2

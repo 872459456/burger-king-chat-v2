@@ -2,8 +2,11 @@
 飞书交互接口
 基于 larksuiteoapi SDK，支持：消息接收、消息发送、用户介入检测
 """
+
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
@@ -13,16 +16,37 @@ from typing import Callable, Optional
 import yaml
 
 
+def _configure_utf8_env():
+    """配置 UTF-8 环境（Windows 兼容）"""
+    if sys.platform == "win32":
+        os.environ["PYTHONIOENCODING"] = "utf-8"
+        if hasattr(sys.stdout, "reconfigure"):
+            try:
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+_configure_utf8_env()
+
+
 def run_openclaw(command: list, timeout: int = 30) -> tuple[int, str, str]:
     """执行 OpenClaw CLI 命令"""
-    import subprocess
+    if command[0] == "openclaw":
+        npm_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "npm")
+        command[0] = str(Path(npm_path) / "openclaw.cmd")
+        if not Path(command[0]).exists():
+            command[0] = str(Path(npm_path) / "openclaw.CMD")
+
     try:
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=timeout
+            errors="replace",
+            timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -56,18 +80,32 @@ class FeishuClient:
         """设置消息处理器"""
         self.message_handler = handler
 
-    def send_message(self, content: str) -> bool:
-        """发送文本消息到飞书群"""
+    def send_message(self, content: str, reply_in_thread: bool = False) -> bool:
+        """发送文本消息到飞书群
+
+        Args:
+            content: 消息内容
+            reply_in_thread: 是否回复在话题内，默认False发送到主流
+        """
         if not self.enabled:
             return False
 
         cmd = [
-            "openclaw", "message", "send",
-            "--channel", "feishu",
-            "--account", self.account,
-            "--target", self.group_id,
-            "--message", content
+            "openclaw",
+            "message",
+            "send",
+            "--channel",
+            "feishu",
+            "--account",
+            self.account,
+            "--target",
+            self.group_id,
+            "--message",
+            content,
         ]
+
+        if not reply_in_thread:
+            cmd.extend(["--reply-in-thread", "false"])
 
         code, stdout, stderr = run_openclaw(cmd, timeout=30)
 
@@ -101,10 +139,15 @@ class FeishuClient:
     def _read_recent_messages(self, limit: int = 10) -> list[dict]:
         """读取最近消息"""
         cmd = [
-            "openclaw", "message", "read",
-            "--channel", "feishu",
-            "--account", self.account,
-            "--limit", str(limit)
+            "openclaw",
+            "message",
+            "read",
+            "--channel",
+            "feishu",
+            "--account",
+            self.account,
+            "--limit",
+            str(limit),
         ]
 
         code, stdout, stderr = run_openclaw(cmd, timeout=15)
@@ -124,25 +167,56 @@ class FeishuClient:
             # 降级：按行解析
             for line in stdout.strip().split("\n"):
                 line = line.strip()
-                if line and not self._is_bot_message_text(line):
-                    messages.append({"content": line, "time": time.time()})
+                if line:
+                    sender = self._extract_sender(line)
+                    if not self._is_bot_message_text(line, sender):
+                        messages.append(
+                            {"content": line, "time": time.time(), "sender": sender}
+                        )
 
         return messages
 
-    def _is_bot_message_text(self, text: str) -> bool:
-        """判断是否为机器人消息"""
+    def _extract_sender(self, text: str) -> Optional[str]:
+        """从消息文本中提取发送者标识"""
+        text = text.strip()
+        for bot in self.bot_names:
+            if text.startswith(f"[{bot}]"):
+                return bot
+            if f"【{bot}】" in text[:10]:
+                return bot
+        return None
+
+    def _is_bot_message_text(self, text: str, sender: str = None) -> bool:
+        """判断是否为机器人消息
+
+        Args:
+            text: 消息文本
+            sender: 发送者标识（可选）
+        """
         text = text.strip()
         if not text:
             return True
-        # 以 bot 名称开头的是机器人消息
+
+        # 检查发送者是否为当前bot账号
+        if sender and sender == self.account:
+            return True
+
+        # 以 bot 名称前缀开头的是机器人消息
         for bot in self.bot_names:
             if text.startswith(f"[{bot}]") or text.startswith(f"{bot}："):
                 return True
+            # 兼容没有方括号但有冒号的格式
+            if f"【{bot}】" in text[:10] or f"{bot}:" in text[:10]:
+                return True
+
         # 系统消息特征
-        if any(text.startswith(x) for x in ["🐺", "🏁", "📊", "💾", "📋", "🍔", "🍟", "🥤"]):
+        if any(
+            text.startswith(x) for x in ["🐺", "🏁", "📊", "💾", "📋", "🍔", "🍟", "🥤"]
+        ):
             return True
         if "圆桌会议" in text and ("开始" in text or "结束" in text):
             return True
+
         return False
 
     def _is_valuable_user_message(self, msg: dict) -> bool:
@@ -154,11 +228,13 @@ class FeishuClient:
 
         # 过滤纯符号
         import re
-        if re.match(r'^[\s\W]+$', content):
+
+        if re.match(r"^[\s\W]+$", content):
             return False
 
-        # 过滤机器人消息
-        if self._is_bot_message_text(content):
+        # 过滤机器人消息（使用 sender 信息和内容双重判断）
+        sender = msg.get("sender")
+        if self._is_bot_message_text(content, sender):
             return False
 
         # 检查是否在可接受的时间窗口内（避免处理历史消息）
@@ -177,11 +253,13 @@ class FeishuClient:
         sender = msg.get("sender", "unknown")
 
         with self._queue_lock:
-            self.user_input_queue.append({
-                "content": content,
-                "sender": sender,
-                "timestamp": datetime.now().isoformat()
-            })
+            self.user_input_queue.append(
+                {
+                    "content": content,
+                    "sender": sender,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
         self.logger.info(f"[用户介入] {content[:50]}")
 
@@ -227,6 +305,7 @@ class FeishuClient:
 
 if __name__ == "__main__":
     import logging
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("test")
 
@@ -236,7 +315,7 @@ if __name__ == "__main__":
         "group_id": "oc_9ea914f5ad7acbd9061c915a0f942d5c",
         "group_name": "汉堡王",
         "bot_names": ["汉堡", "薯条", "可乐"],
-        "user_keywords": {"有价值": "有价值", "无价值": "无价值"}
+        "user_keywords": {"有价值": "有价值", "无价值": "无价值"},
     }
 
     client = FeishuClient(config, logger)
