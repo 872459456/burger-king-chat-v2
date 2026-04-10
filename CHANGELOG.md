@@ -129,5 +129,40 @@ burger-king-chat-v2/
 
 ---
 
+---
+
+## v2.2.1 - 2026-04-10
+
+### 新增功能
+
+#### 投票通过的总结持久化存储
+- 投票通过（≥8分）后，自动存储到各Agent的memory目录
+- 存储内容：议题 + 洋葱圈总结 + 投票结果 + 日期
+- 存储位置：`workspace-*/memory/roundtable-summary-*.md`
+
+**存储格式**：
+```markdown
+# 圆桌会议总结
+
+## 议题
+[topic]
+
+## 洋葱圈总结
+[summary]
+
+## 投票结果
+| Agent | 评分 | 理由 |
+|-------|------|------|
+| 🍔 汉堡 | 4分 | xxx |
+| 🍟 薯条 | 4分 | xxx |
+| 🥤 可乐 | 4分 | xxx |
+| 👤 子龙 | 4分 | xxx |
+
+## 总分
+16分 (长期记忆)
+```
+
+---
+
 **Author**: 宋子龙 (狼群团队)
 **Repository**: https://github.com/872459456/burger-king-chat-v2
